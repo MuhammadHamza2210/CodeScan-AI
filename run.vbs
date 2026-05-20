@@ -1,0 +1,2 @@
+Set objShell = CreateObject("WScript.Shell")
+objShell.Run "C:\Users\ihamz\anaconda3\envs\codescan\python.exe -m streamlit run ""C:\Users\ihamz\.spyder-py3\ai project\app.py"" --server.port 8505 --browser.serverAddress localhost", 0, False
