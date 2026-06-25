@@ -1,5 +1,7 @@
 # CodeScan AI 🔍
 
+> 🔴 **Live demo:** **https://codescan-ai-lkuctppx3i2c4izvjpekkc.streamlit.app/**
+
 A code plagiarism / similarity detector built with **Python + Streamlit**. It
 compares programs using several engines — AST structure, ML classification,
 control-flow graphs, winnowing fingerprints and tree edit distance — to score
