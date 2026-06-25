@@ -72,14 +72,22 @@ ml_classifier = MLPlagiarismClassifier()
 def add_training_example(features: Dict, label: str):
     import streamlit as st
     from datetime import datetime
-    
+
     st.session_state["training_data"].append({
         'features': features,
         'label': label,
         'timestamp': datetime.now().isoformat(),
     })
+
+    # Persist to the database so training data survives restarts.
+    try:
+        from database import db
+        db.save_training_example(features, label)
+    except Exception:
+        pass  # persistence is best-effort; never block a scan on it
+
     if len(st.session_state["training_data"]) >= 10:
         if ml_classifier.train(st.session_state["training_data"]):
             st.sidebar.success(
                 f"ML Model trained on {len(st.session_state['training_data'])} examples!"
-            ) 
+            )

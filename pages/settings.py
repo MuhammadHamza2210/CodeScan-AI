@@ -2,11 +2,20 @@ import streamlit as st
 from config import HAS_ZSS, HAS_TRANSFORMERS, HAS_SKLEARN
 
 def page_settings():
-    st.markdown("""<div style="padding:8px 0 24px 0;"><h1 style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#e8e8f0;">Settings</h1></div>""", unsafe_allow_html=True)
-    
+    st.markdown("""
+    <div style="padding:6px 0 22px 0;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22d3ee;box-shadow:0 0 10px #22d3ee;"></span>
+        <span style="font-size:10px;color:#22d3ee;letter-spacing:3px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">// Configuration</span>
+      </div>
+      <h1 style="font-family:'Orbitron',sans-serif;font-size:34px;font-weight:800;color:#d7f7ff;margin:0;line-height:1.15;letter-spacing:2px;text-shadow:0 0 22px rgba(34,211,238,.45);">SETTINGS</h1>
+      <p style="color:rgba(143,182,196,0.7);font-size:12px;font-family:'JetBrains Mono',monospace;margin-top:8px;letter-spacing:.5px;">> toggle detection cores · changes persist instantly</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     s = st.session_state["settings"]
-    
-    st.markdown("### 🎯 Detection Engines")
+
+    st.markdown("""<div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#22d3ee;letter-spacing:1px;text-shadow:0 0 10px rgba(34,211,238,.4);margin:8px 0 4px;">▚ Detection Engines</div>""", unsafe_allow_html=True)
     st.caption("⚡ Settings save automatically when you change them")
     
     # Auto-save on change using callback

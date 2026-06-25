@@ -11,7 +11,7 @@ from engines.ml_classifier import ml_classifier, add_training_example
 from utils import *
 from ui_components import badge, score_ring, stat_row, mini_bar, diff_viewer
 from report import generate_report, generate_html_report
-from database import db  # ADD THIS IMPORT
+from database import db
 
 def detect_plagiarism(code_a: str, code_b: str, method: str, sensitivity: int, language: str) -> dict:
     settings = st.session_state["settings"]
@@ -65,6 +65,24 @@ def detect_plagiarism(code_a: str, code_b: str, method: str, sensitivity: int, l
     else:
         codebert_sim = 0.0
 
+    # ============================================================
+    # SHORT CODE FALSE POSITIVE REDUCTION
+    # ============================================================
+    lines_a = len(code_a.splitlines())
+    lines_b = len(code_b.splitlines())
+    min_lines = min(lines_a, lines_b)
+    
+    if min_lines < 15 and seq_sim < 30 and jac_sim < 50:
+        reduction = 0.5
+        ast_sim = ast_sim * reduction
+        # cfg_sim = cfg_sim * reduction  # REMOVED - CFG no longer reduced
+        bytecode_sim = bytecode_sim * reduction
+        codebert_sim = codebert_sim * reduction
+        ta_jac_sim = ta_jac_sim * reduction
+        ta_seq_sim = ta_seq_sim * reduction
+        ted_sim = ted_sim * reduction
+        big_o_match = big_o_match * reduction
+
     all_metrics = {
         'type_agnostic_seq_sim': ta_seq_sim,
         'type_agnostic_jac_sim': ta_jac_sim,
@@ -89,22 +107,22 @@ def detect_plagiarism(code_a: str, code_b: str, method: str, sensitivity: int, l
         else:
             dead_engines.append(metric_name)
 
-    if len(active_metrics) >= 4:
-        values = list(active_metrics.values())
-        values.sort()
-        median = values[len(values) // 2]
-        filtered_metrics = {}
-        for k, v in active_metrics.items():
-            if abs(v - median) <= 60:
-                filtered_metrics[k] = v
-        if filtered_metrics:
-            active_metrics = filtered_metrics
-
+    # ============================================================
+    # WEIGHTED SCORING (UPDATED WEIGHTS)
+    # ============================================================
     weights = {
-        'bytecode_sim': 3.5, 'big_o_match': 3.5, 'ted_sim': 3.0,
-        'cfg_sim': 2.5, 'codebert_sim': 3.0, 'type_agnostic_jac_sim': 2.0,
-        'type_agnostic_seq_sim': 1.5, 'ast_sim': 2.0, 'winnowing_sim': 1.5,
-        'jac_sim': 0.5, 'seq_sim': 0.3, 'ngram_sim': 0.3,
+        'codebert_sim': 5.0,
+        'big_o_match': 5.0,
+        'bytecode_sim': 4.0,
+        'ast_sim': 3.0,
+        'cfg_sim': 3.0,           # Increased from 2.0 to 3.0
+        'type_agnostic_jac_sim': 2.5,
+        'ted_sim': 2.5,
+        'type_agnostic_seq_sim': 1.5,
+        'winnowing_sim': 0.5,
+        'jac_sim': 0.3,
+        'seq_sim': 0.2,
+        'ngram_sim': 0.2,
     }
 
     if not active_metrics:
@@ -112,12 +130,8 @@ def detect_plagiarism(code_a: str, code_b: str, method: str, sensitivity: int, l
     else:
         weighted_sum = 0.0
         total_weight = 0.0
-        median_val = sorted(active_metrics.values())[len(active_metrics) // 2]
         for metric_name, metric_value in active_metrics.items():
             w = weights.get(metric_name, 1.0)
-            distance_from_median = abs(metric_value - median_val)
-            if distance_from_median < 20:
-                w *= 1.3
             weighted_sum += metric_value * w
             total_weight += w
         final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
@@ -176,12 +190,13 @@ def detect_plagiarism(code_a: str, code_b: str, method: str, sensitivity: int, l
 
 def page_analyze():
     st.markdown("""
-    <div style="padding:8px 0 24px 0;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-        <span style="font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:1.5px;text-transform:uppercase;font-family:'DM Sans',sans-serif;">6-Engine Ultimate Detection</span>
+    <div style="padding:6px 0 22px 0;position:relative;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#00ff9c;box-shadow:0 0 10px #00ff9c;"></span>
+        <span style="font-size:10px;color:#22d3ee;letter-spacing:3px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">// 6-Engine Forensic Detection</span>
       </div>
-      <h1 style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#e8e8f0;margin:0;line-height:1.2;">Analyze Code Similarity</h1>
-      <p style="color:rgba(255,255,255,0.35);font-size:13px;font-family:'DM Sans',sans-serif;margin-top:6px;">Decision Tree • Tree Edit Distance • CFG • Winnowing • CodeBERT • Type-Agnostic Normalization</p>
+      <h1 style="font-family:'Orbitron',sans-serif;font-size:34px;font-weight:800;color:#d7f7ff;margin:0;line-height:1.15;letter-spacing:2px;text-shadow:0 0 22px rgba(34,211,238,.45);">ANALYZE<span style="color:#22d3ee;"> SIMILARITY</span></h1>
+      <p style="color:rgba(143,182,196,0.7);font-size:12px;font-family:'JetBrains Mono',monospace;margin-top:8px;letter-spacing:.5px;">> decision_tree · tree_edit · cfg · winnowing · codebert · type_agnostic</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -203,23 +218,23 @@ def page_analyze():
         st.markdown("<br>", unsafe_allow_html=True)
         cola, colb = st.columns(2)
         with cola:
-            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#7c6dfa;border-radius:50%;"></div><span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:#e8e8f0;">Code Snippet A</span></div>""", unsafe_allow_html=True)
+            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#22d3ee;border-radius:50%;box-shadow:0 0 10px #22d3ee;"></div><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#d7f7ff;letter-spacing:1px;text-transform:uppercase;">Code Snippet A</span></div>""", unsafe_allow_html=True)
             code_a = st.text_area("Code A", height=280, placeholder="# Paste first code snippet here...", label_visibility="collapsed", key="code_a_text") or ""
         with colb:
-            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#a78bfa;border-radius:50%;"></div><span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:#e8e8f0;">Code Snippet B</span></div>""", unsafe_allow_html=True)
+            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#00ff9c;border-radius:50%;box-shadow:0 0 10px #00ff9c;"></div><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#d7f7ff;letter-spacing:1px;text-transform:uppercase;">Code Snippet B</span></div>""", unsafe_allow_html=True)
             code_b = st.text_area("Code B", height=280, placeholder="# Paste second code snippet here...", label_visibility="collapsed", key="code_b_text") or ""
 
     with input_tab2:
         st.markdown("<br>", unsafe_allow_html=True)
         fc1, fc2 = st.columns(2)
         with fc1:
-            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#7c6dfa;border-radius:50%;"></div><span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:#e8e8f0;">Upload File A</span></div>""", unsafe_allow_html=True)
+            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#22d3ee;border-radius:50%;box-shadow:0 0 10px #22d3ee;"></div><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#d7f7ff;letter-spacing:1px;text-transform:uppercase;">Upload File A</span></div>""", unsafe_allow_html=True)
             file_a = st.file_uploader("File A", type=["py","java","cpp","c","js","txt"], label_visibility="collapsed", key="file_a")
             if file_a:
                 code_a = file_a.read().decode("utf-8", errors="replace")
-                st.markdown(f"<div style='margin-top:8px;'>{badge(file_a.name, '#34d399')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='margin-top:8px;'>{badge(file_a.name, '#00ff9c')}</div>", unsafe_allow_html=True)
         with fc2:
-            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#a78bfa;border-radius:50%;"></div><span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:#e8e8f0;">Upload File B</span></div>""", unsafe_allow_html=True)
+            st.markdown("""<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:8px;height:8px;background:#00ff9c;border-radius:50%;box-shadow:0 0 10px #00ff9c;"></div><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#d7f7ff;letter-spacing:1px;text-transform:uppercase;">Upload File B</span></div>""", unsafe_allow_html=True)
             file_b = st.file_uploader("File B", type=["py","java","cpp","c","js","txt"], label_visibility="collapsed", key="file_b")
             if file_b:
                 code_b = file_b.read().decode("utf-8", errors="replace")
@@ -243,13 +258,11 @@ def page_analyze():
             st.session_state["last_result"] = result
             
             if s["save_history"]:
-                # Save to session state (for current session)
                 entry = {**result, "lang": lang, "method": method, "code_a_preview": code_a[:120], "code_b_preview": code_b[:120]}
                 st.session_state["history"].insert(0, entry)
                 if len(st.session_state["history"]) > 100:
                     st.session_state["history"] = st.session_state["history"][:100]
                 
-                # Save to database (permanent) - ONLY if save_history is enabled
                 try:
                     db.save_scan(result, code_a, code_b, "Code A", "Code B")
                 except Exception as e:
@@ -259,14 +272,14 @@ def page_analyze():
     if result:
         v_color = {"PLAGIARIZED": "#f87171", "SUSPICIOUS": "#fbbf24", "ORIGINAL": "#34d399"}.get(result["verdict"], "#7c6dfa")
         st.markdown('<div style="height:1px;background:rgba(255,255,255,0.06);margin:24px 0 20px 0;"></div>', unsafe_allow_html=True)
-        st.markdown(f"""<div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:#e8e8f0;margin-bottom:8px;">⬡ Ultimate Analysis Results</div><div style="color:{v_color};font-size:11px;margin-bottom:16px;">{result.get('engines_used', 0)} Detection Engines Active</div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:#d7f7ff;margin-bottom:8px;letter-spacing:1.5px;text-shadow:0 0 16px rgba(34,211,238,.4);">⬡ ANALYSIS RESULTS</div><div style="color:{v_color};font-size:11px;margin-bottom:16px;font-family:'JetBrains Mono',monospace;letter-spacing:1px;">> {result.get('engines_used', 0)} detection engines active</div>""", unsafe_allow_html=True)
 
         r1, r2 = st.columns([1, 2])
         with r1:
             st.markdown(score_ring(result["score"], result["verdict"]), unsafe_allow_html=True)
             st.markdown(stat_row([
-                ("Tokens A", result["tokens_a"], "#7c6dfa"),
-                ("Tokens B", result["tokens_b"], "#a78bfa"),
+                ("Tokens A", result["tokens_a"], "#22d3ee"),
+                ("Tokens B", result["tokens_b"], "#00ff9c"),
                 ("Shared", result["shared_tokens"], "#34d399"),
             ]), unsafe_allow_html=True)
             if result.get("ml_verdict"):
@@ -274,15 +287,12 @@ def page_analyze():
 
         with r2:
             st.markdown(f"""
-            <div style="background:#18181e;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:22px 24px;margin-bottom:14px;">
-              <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;font-family:'DM Sans',sans-serif;margin-bottom:14px;">All Detection Engines</div>
-              <div style="margin-bottom:10px;padding:6px;background:rgba(124,109,250,0.1);border-radius:6px;">
-                <span style="font-size:11px;color:#a78bfa;">🔬 Enhanced CFG: Try/Except + Call Detection Enabled</span>
-              </div>
-              {mini_bar("Type-Agnostic Sequence", result.get('type_agnostic_seq_sim', 0), "#a78bfa")}
-              {mini_bar("Type-Agnostic Jaccard", result.get('type_agnostic_jac_sim', 0), "#c4b5fd")}
+            <div style="background:rgba(8,18,28,0.6);border:1px solid rgba(34,211,238,0.16);border-radius:4px;padding:22px 24px;margin-bottom:14px;box-shadow:0 0 0 1px rgba(34,211,238,0.04), inset 0 0 20px rgba(34,211,238,0.03);">
+              <div style="font-size:10px;color:#22d3ee;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:16px;">▚ All Detection Engines</div>
+              {mini_bar("Type-Agnostic Sequence", result.get('type_agnostic_seq_sim', 0), "#22d3ee")}
+              {mini_bar("Type-Agnostic Jaccard", result.get('type_agnostic_jac_sim', 0), "#5eead4")}
               {mini_bar("Tree Edit Distance (AST)", result.get('ted_sim', 0), "#f59e0b")}
-              {mini_bar("Control Flow Graph (Deepened)", result.get('cfg_sim', 0), "#ef4444")}
+              {mini_bar("Control Flow Graph", result.get('cfg_sim', 0), "#ef4444")}
               {mini_bar("Winnowing (MOSS)", result.get('winnowing_sim', 0), "#8b5cf6")}
               {mini_bar("CodeBERT Semantic", result.get('codebert_sim', 0), "#ec4899")}
               {mini_bar("Bytecode", result.get('bytecode_sim', 0), "#06b6d4")}
